@@ -16,12 +16,13 @@ module ReferenceDeployment {
   # Subtopology imports
   # ----------------------------------------------------------------------
     import CdhCore.Subtopology
-    import ComCcsds.Subtopology
+    import ComCcsds.FramingSubtopology
     import DataProducts.Subtopology
     import FileHandling.Subtopology
     import NmeaGps.Subtopology
     import MpuImu.Subtopology
     import Bmp280.Subtopology
+    import Rfm69.Subtopology
     
   # ----------------------------------------------------------------------
   # Instances used in the topology
@@ -33,7 +34,6 @@ module ReferenceDeployment {
     instance rateGroupDriver
     instance systemResources
     instance timer
-    instance comDriver
     instance cmdSeq
 
   # ----------------------------------------------------------------------
@@ -80,17 +80,18 @@ module ReferenceDeployment {
     }
 
     connections Communications {
-      # ComDriver buffer allocations
-      comDriver.allocate      -> ComCcsds.commsBufferManager.bufferGetCallee
-      comDriver.deallocate    -> ComCcsds.commsBufferManager.bufferSendIn
-      
-      # ComDriver <-> ComStub (Uplink)
-      comDriver.$recv                     -> ComCcsds.comStub.drvReceiveIn
-      ComCcsds.comStub.drvReceiveReturnOut -> comDriver.recvReturnIn
-      
-      # ComStub <-> ComDriver (Downlink)
-      ComCcsds.comStub.drvSendOut      -> comDriver.$send
-      comDriver.ready         -> ComCcsds.comStub.drvConnected
+      # RFM69 manager buffer allocations
+      Rfm69.rfm69Manager.allocate   -> ComCcsds.commsBufferManager.bufferGetCallee
+      Rfm69.rfm69Manager.deallocate -> ComCcsds.commsBufferManager.bufferSendIn
+
+      # Framer <-> RFM69 manager (Downlink)
+      ComCcsds.framer.dataOut            -> Rfm69.rfm69Manager.dataIn
+      Rfm69.rfm69Manager.dataReturnOut   -> ComCcsds.framer.dataReturnIn
+      Rfm69.rfm69Manager.comStatusOut    -> ComCcsds.framer.comStatusIn
+
+      # RFM69 manager <-> FrameAccumulator (Uplink)
+      Rfm69.rfm69Manager.dataOut              -> ComCcsds.frameAccumulator.dataIn
+      ComCcsds.frameAccumulator.dataReturnOut -> Rfm69.rfm69Manager.dataReturnIn
     }
 
     connections FileHandling_DataProducts {
@@ -111,6 +112,7 @@ module ReferenceDeployment {
       rateGroup1.RateGroupMemberOut[3] -> ComCcsds.comQueue.run
       rateGroup1.RateGroupMemberOut[4] -> MpuImu.imuManager.run
       rateGroup1.RateGroupMemberOut[5] -> Bmp280.bmpManager.run
+      rateGroup1.RateGroupMemberOut[6] -> Rfm69.rfm69Manager.run
 
 
       # Rate group 2
